@@ -70,6 +70,11 @@ cd src/
 python blur.py
 python train.py
 ```
+5. Optional: run tensorboard to observe training processes
+```
+tensorboard --logdir ../logs/
+```
+
 
 ## References
 1. Saikat Basu, Manohar Karki, Sangram Ganguly, Robert DiBiano, Supratik Mukhopadhyay, Ramakrishna Nemani, Learning Sparse Feature Representations using Probabilistic Quadtrees and Deep Belief Nets, European Symposium on Artificial Neural Networks, ESANN 2015
