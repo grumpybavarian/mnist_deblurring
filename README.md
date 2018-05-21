@@ -48,7 +48,30 @@ mnist_deblurring
 ```
 
 ## How to use this code
-TODO
+1. clone this repository
+```
+git clone https://github.com/te95/mnist_deblurring && cd mnist_deblurring
+```
+2. Create a virtualenv (optional but recommended)
+```
+virtualenv -p python3 cnn_deblurring
+```
+and activate it (the following command works on Linux, other operating systems might differ):
+```
+source cnn_deblurring/bin/activate
+```
+3. Install all dependencies:
+```
+pip install -r requirements.txt
+```
+4. run the blur script to generate the training data
+```
+python src/blur.py
+```
+5. run the training script
+```
+python src/train.py
+```
 
 ## References
 1. Saikat Basu, Manohar Karki, Sangram Ganguly, Robert DiBiano, Supratik Mukhopadhyay, Ramakrishna Nemani, Learning Sparse Feature Representations using Probabilistic Quadtrees and Deep Belief Nets, European Symposium on Artificial Neural Networks, ESANN 2015
