@@ -8,14 +8,12 @@ import os
 
 class Model(object):
     def __init__(self):
-        # self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.80)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+        self.sess = tf.Session()
 
         self.train_dataset, self.val_dataset = self.create_datasets()
 
-        self.train_init, self.val_init, self.input, self.target, self.output, \
-        self.loss, self.is_training = self.create_network()
+        self.train_init, self.val_init, self.input, self.target, self.output, self.loss, self.is_training = \
+            self.create_network()
 
         self.train_summaries, self.val_summaries, self.summary_writer = self.create_summaries()
 
@@ -44,9 +42,9 @@ class Model(object):
         val_summaries = tf.summary.merge([validation_loss_summary])
 
         datestring = datetime.strftime(datetime.now(), '%m-%d_%H%M%S')
-        self.run_name = datestring
+        run_name = datestring
 
-        log_dir = "./logs/" + self.run_name + "/"
+        log_dir = "../logs/" + run_name + "/"
         summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)
 
         return train_summaries, val_summaries, summary_writer
@@ -64,7 +62,7 @@ class Model(object):
         return image, target_image
 
     def create_datasets(self):
-        blurred_files = glob.glob('./data/blurred/*.png')
+        blurred_files = glob.glob('../data/blurred/*.png')
         target_files = []
 
         n_samples = len(blurred_files)
@@ -79,9 +77,8 @@ class Model(object):
         train_dataset = train_dataset.repeat().map(Model.map_data, num_parallel_calls=8)
 
         val_dataset = tf.data.Dataset.from_tensor_slices((blurred_files[n_train_samples:],
-                                                            target_files[n_train_samples:]))
+                                                          target_files[n_train_samples:]))
         val_dataset = val_dataset.map(Model.map_data, num_parallel_calls=8)
-
 
         batch_size = 16
         train_dataset = train_dataset.batch(batch_size=batch_size).prefetch(2)
@@ -91,7 +88,7 @@ class Model(object):
 
     def create_network(self):
         iter = tf.data.Iterator.from_structure(self.train_dataset.output_types,
-                                                     self.train_dataset.output_shapes)
+                                               self.train_dataset.output_shapes)
         train_init = iter.make_initializer(self.train_dataset)
         val_init = iter.make_initializer(self.val_dataset)
 
@@ -105,13 +102,13 @@ class Model(object):
 
         output = tf.layers.conv2d(input, channel_numbers[0], [kernel_sizes[0], kernel_sizes[0]], padding="same",
                                   activation=tf.nn.relu)
-        # output = tf.layers.batch_normalization(output, training=is_training, trainable=False)
+
         output = tf.layers.dropout(output, rate=0.1, training=is_training)
 
         for i in range(1, len(kernel_sizes[:-1])):
             output = tf.layers.conv2d(output, channel_numbers[i], [kernel_sizes[i], kernel_sizes[i]], padding="same",
-                                  activation=tf.nn.relu)
-            # output = tf.layers.batch_normalization(output, training=is_training, trainable=False)
+                                      activation=tf.nn.relu)
+
             output = tf.layers.dropout(output, rate=0.1, training=is_training)
         output = tf.layers.conv2d(output, channel_numbers[-1], [kernel_sizes[-1], kernel_sizes[-1]], padding="same",
                                   activation=None)
@@ -151,14 +148,14 @@ class Model(object):
         while True:
             try:
                 inp, targets, outp, l = self.sess.run([self.input, self.target, self.output, self.loss],
-                                             feed_dict={self.is_training: False})
+                                                      feed_dict={self.is_training: False})
                 val_loss += l
                 n += 1
 
                 if n > i or i % 25 != 0:
                     continue
 
-                path = './data/val/{:05d}'.format(i)
+                path = '../data/val/{:05d}'.format(i)
                 os.makedirs(path, exist_ok=True)
                 for i in range(min(50, inp.shape[0])):
                     img = np.clip(inp[i], 0, 1) * 255.
@@ -175,10 +172,10 @@ class Model(object):
         self.summary_writer.flush()
 
     def test(self, i):
-        path = './data/test/{:05d}'.format(i)
+        path = '../data/test/{:05d}'.format(i)
         os.makedirs(path, exist_ok=True)
 
-        test_files = glob.glob('./data/test_images/*.png')
+        test_files = glob.glob('../data/test_images/*.png')
 
         for i, f in enumerate(test_files):
             img = self.sess.run(self.load_image_op, feed_dict={self.filename_pl: f})
@@ -196,6 +193,7 @@ class Model(object):
 def main():
     m = Model()
     m.run_training()
+
 
 if __name__ == '__main__':
     main()
