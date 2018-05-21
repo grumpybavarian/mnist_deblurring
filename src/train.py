@@ -19,11 +19,10 @@ class Model(object):
 
         self.filename_pl, self.load_image_op = self.load_image()
 
-        with tf.device('/gpu:0'):
-            self.global_step = tf.Variable(0, trainable=False, name='global_step', dtype=tf.int64)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=5e-4)
-            self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
-            self.init = tf.global_variables_initializer()
+        self.global_step = tf.Variable(0, trainable=False, name='global_step', dtype=tf.int64)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=5e-4)
+        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+        self.init = tf.global_variables_initializer()
 
     def load_image(self):
         filename = tf.placeholder(tf.string, shape=())
