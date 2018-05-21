@@ -26,10 +26,10 @@ Our CNN had a fairly simple architecture of 3 convolutional layers with kernel s
 ## Results
 Some of images from the N-MNIST dataset that we deblurred using our CNN can be seen below. The upper half shows the blurry picture (so the input to our CNN) and the lower half shows the deblurred picture (the output of our algorithm).
 
-![](./results/img_00004.png)
-![](./results/img_00006.png)
-![](./results/img_00009.png)
-![](./results/img_00014.png)
+<img src="results/img_00004.png" width="100">
+<img src="results/img_00006.png" width="100">
+<img src="results/img_00009.png" width="100">
+<img src="results/img_00014.png" width="100">
 
 ## Repository Structure
 ```
@@ -42,6 +42,7 @@ mnist_deblurring
 |  |- blur.py: adds artificial blur to the clear MNIST files 
 |  |- train.py: trains a CNN to deblur images
 |  |- create_kernels.m: MATLAB script to create blur kernels
++- results: contains result images
 +- README.md: Project Documentation
 +- requirements.txt: list of all required pip packages
 ```
