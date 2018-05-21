@@ -64,13 +64,11 @@ source cnn_deblurring/bin/activate
 ```
 pip install -r requirements.txt
 ```
-4. run the blur script to generate the training data
+4. run the blur script to generate the training data and the train script to start the training:
 ```
-python src/blur.py
-```
-5. run the training script
-```
-python src/train.py
+cd src/
+python blur.py
+python train.py
 ```
 
 ## References
