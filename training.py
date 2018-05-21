@@ -12,17 +12,32 @@ import time
 class Model(object):
     def __init__(self):
         # self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
-        self.sess = tf.Session()
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.80)
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
         self.train_dataset, self.val_dataset = self.create_datasets()
-        self.train_init, self.val_init, self.input, self.target, self.output, self.loss, self.is_training = \
-            self.create_network()
+
+        self.train_init, self.val_init, self.input, self.target, self.output, \
+        self.loss, self.is_training = self.create_network()
+
         self.train_summaries, self.val_summaries, self.summary_writer = self.create_summaries()
+
+        self.filename_pl, self.load_image_op = self.load_image()
 
         with tf.device('/gpu:0'):
             self.global_step = tf.Variable(0, trainable=False, name='global_step', dtype=tf.int64)
-            self.optimizer = tf.train.MomentumOptimizer(learning_rate=1e-3, momentum=0.9)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=5e-4)
             self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
             self.init = tf.global_variables_initializer()
+
+    def load_image(self):
+        filename = tf.placeholder(tf.string, shape=())
+        img = tf.read_file(filename)
+        img = tf.image.decode_image(img, channels=1)
+        img = tf.image.convert_image_dtype(img, dtype=tf.float32)
+
+        return filename, img
+
 
     def create_summaries(self):
         loss_summary = tf.summary.scalar('train/loss', self.loss)
@@ -61,7 +76,7 @@ class Model(object):
             target_f = f.replace('blurred', 'target')[:-6] + '.png'
             target_files.append(target_f)
 
-        n_train_samples = int(0.9 * n_samples)
+        n_train_samples = int(0.8 * n_samples)
 
         train_dataset = tf.data.Dataset.from_tensor_slices((blurred_files[:n_train_samples],
                                                             target_files[:n_train_samples]))
@@ -71,9 +86,10 @@ class Model(object):
                                                             target_files[n_train_samples:]))
         val_dataset = val_dataset.map(Model.map_data, num_parallel_calls=8)
 
-        batch_size = 32
-        train_dataset = train_dataset.batch(batch_size=batch_size).prefetch(10)
-        val_dataset = val_dataset.batch(batch_size=n_samples - n_train_samples)
+
+        batch_size = 16
+        train_dataset = train_dataset.batch(batch_size=batch_size).prefetch(2)
+        val_dataset = val_dataset.batch(batch_size=batch_size)
 
         return train_dataset, val_dataset
 
@@ -87,18 +103,21 @@ class Model(object):
         input = tf.reshape(input, shape=[-1, 28, 28, 1])
         target = tf.reshape(target, shape=[-1, 28, 28, 1])
 
-        kernel_sizes = [10, 1, 7, 5, 5, 3, 3, 3]
-        channel_numbers = [128, 128, 128, 128, 128, 128, 128, 1]
+        kernel_sizes = [7, 5, 3]
+        channel_numbers = [64, 64, 1]
         is_training = tf.placeholder_with_default(True, shape=())
 
         output = tf.layers.conv2d(input, channel_numbers[0], [kernel_sizes[0], kernel_sizes[0]], padding="same",
                                   activation=tf.nn.relu)
+        # output = tf.layers.batch_normalization(output, training=is_training, trainable=False)
+        output = tf.layers.dropout(output, rate=0.1, training=is_training)
 
         for i in range(1, len(kernel_sizes[:-1])):
             output = tf.layers.conv2d(output, channel_numbers[i], [kernel_sizes[i], kernel_sizes[i]], padding="same",
                                   activation=tf.nn.relu)
-            output = tf.layers.batch_normalization(output, training=is_training)
-        output = tf.layers.conv2d(input, channel_numbers[-1], [kernel_sizes[-1], kernel_sizes[-1]], padding="same",
+            # output = tf.layers.batch_normalization(output, training=is_training, trainable=False)
+            output = tf.layers.dropout(output, rate=0.1, training=is_training)
+        output = tf.layers.conv2d(output, channel_numbers[-1], [kernel_sizes[-1], kernel_sizes[-1]], padding="same",
                                   activation=None)
 
         loss = tf.losses.mean_squared_error(labels=target, predictions=output)
@@ -110,28 +129,26 @@ class Model(object):
 
         i = 0
         while True:
-            if i % 25 == 0:
-                self.test(i)
             self.train()
             self.validate(i)
+            if i % 25 == 0:
+                self.test(i)
             i += 1
 
-    def train(self):
+    def train(self, num_steps=250):
         self.sess.run(self.train_init)
         loss = 0.
-        for i in range(10000):
+
+        for i in range(num_steps):
             try:
                 _, l = self.sess.run([self.train_op, self.loss])
                 loss += l
             except tf.errors.OutOfRangeError:
                 break
-        summ, step = self.sess.run([self.train_summaries, self.global_step], feed_dict={self.loss: loss / 1000})
+        summ, step = self.sess.run([self.train_summaries, self.global_step], feed_dict={self.loss: loss / num_steps})
         self.summary_writer.add_summary(summ, step)
 
     def validate(self, i):
-        path = './data/val/{:05d}'.format(i)
-        os.makedirs(path, exist_ok=True)
-
         self.sess.run(self.val_init)
         val_loss = 0
         n = 0
@@ -142,15 +159,20 @@ class Model(object):
                 val_loss += l
                 n += 1
 
-                for i in range(10):
-                    img = np.clip(inp[i], 0, 1) * 255
-                    pred = np.clip(outp[i], 0, 1) * 255
-                    target = np.clip(targets[i], 0, 1) * 255
+                if n > i or i % 25 != 0:
+                    continue
+
+                path = './data/val/{:05d}'.format(i)
+                os.makedirs(path, exist_ok=True)
+                for i in range(min(50, inp.shape[0])):
+                    img = np.clip(inp[i], 0, 1) * 255.
+                    pred = np.clip(outp[i], 0, 1) * 255.
+                    target = np.clip(targets[i], 0, 1) * 255.
                     stacked_imgs = np.vstack([img, pred, target]).astype(np.uint8)
                     imwrite(os.path.join(path, "img_{:05d}.png".format(i)), stacked_imgs)
             except tf.errors.OutOfRangeError:
                 break
-        print("Val Loss: ", val_loss)
+        print(i, "Val Loss: ", val_loss / n)
 
         summ, step = self.sess.run([self.val_summaries, self.global_step], feed_dict={self.loss: val_loss / n})
         self.summary_writer.add_summary(summ, step)
@@ -160,16 +182,18 @@ class Model(object):
         path = './data/test/{:05d}'.format(i)
         os.makedirs(path, exist_ok=True)
 
-        mnist_test = scipy.io.loadmat('mnist_test.mat')['test']
+        test_files = glob.glob('./data/test_images/*.png')
 
-        for i, img in enumerate(mnist_test):
-            img = np.reshape(img, newshape=[28, 28, 1]) / 255.
-            pred = self.sess.run(self.output, feed_dict={self.input: [img]})[0]
+        for i, f in enumerate(test_files):
+            img = self.sess.run(self.load_image_op, feed_dict={self.filename_pl: f})
+
+            img = np.reshape(img, newshape=[28, 28, 1])
+            pred = self.sess.run(self.output, feed_dict={self.input: [img], self.is_training: False})[0]
 
             pred = np.clip(pred, 0, 1)
             stacked_imgs = np.vstack([img, pred]) * 255
             imwrite(os.path.join(path, "img_{:05d}.png".format(i)), stacked_imgs.astype(np.uint8))
-            if i > 100:
+            if i > 500:
                 break
 
 
